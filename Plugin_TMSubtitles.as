@@ -9,11 +9,36 @@ Resources::Font@ g_font;
 Resources::Font@ g_fontBold;
 Resources::Font@ g_fontIcons;
 
+uint g_currentGear = 1;
+
+float g_currentTime = 0;
+
 void RenderMenu() {
   if (UI::BeginMenu("TMSubtitles")) {
     active = UI::Checkbox("Addon active", active);
     UI::EndMenu();
   }
+}
+
+array<Message@> g_messages;
+
+class Message {
+  string message;
+  float time;
+
+  Message(string message_) {
+    message = message_;
+    time = g_currentTime;
+  }
+
+  bool shouldBeDisplayed() {
+    float displayTime = 1000;
+    return g_currentTime < time + displayTime;
+  }
+}
+
+void Update(float dt) {
+  g_currentTime += dt;
 }
 
 void Main() {
@@ -34,6 +59,17 @@ void Render() {
     return;
   }
 
+  if (visState.CurGear != g_currentGear) {
+    string msg = "";
+    if (visState.CurGear > g_currentGear) {
+      msg = "Gear up to " + visState.CurGear;
+    } else {
+      msg = "Gear down to " + visState.CurGear;
+    }
+    g_messages.InsertLast(Message(msg));
+    g_currentGear = visState.CurGear;
+  }
+
   int windowFlags = UI::WindowFlags::NoTitleBar | UI::WindowFlags::NoCollapse | UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoDocking;
   if (!UI::IsOverlayShown()) {
     windowFlags |= UI::WindowFlags::NoInputs;
@@ -44,10 +80,14 @@ void Render() {
   UI::BeginGroup();
 
   if (UI::BeginTable("table", 1, UI::TableFlags::SizingFixedFit)) {
-    UI::TableNextRow();
-    UI::TableNextColumn();
-    setMinWidth(100);
-    UI::Text("" + visState.CurGear);
+    for (uint i = 0; i < g_messages.Length; ++i) {
+      if (g_messages[i].shouldBeDisplayed()) {
+        UI::TableNextRow();
+        UI::TableNextColumn();
+        setMinWidth(100);
+        UI::Text(g_messages[i].message);
+      }
+    }
     UI::EndTable();
   }
 
