@@ -14,6 +14,9 @@ float g_currentTime = 0;
 uint g_currentGear = 1;
 bool g_isGroundContact = true;
 float g_lastGroundContactTime = 0;
+bool g_isPressingAcceleration = true;
+float g_lastPressingAccelerationTime = 0;
+
 
 void RenderMenu() {
   if (UI::BeginMenu("TMSubtitles")) {
@@ -100,6 +103,18 @@ void Render() {
     }
     g_isGroundContact = isGroundContact;
   }
+
+  bool isPressingAcceleration = visState.InputGasPedal > 0;
+  if (isPressingAcceleration != g_isPressingAcceleration) {
+    if (isPressingAcceleration) {
+      string msg = "Release (" + Math::Round(g_currentTime - g_lastPressingAccelerationTime) + "ms)";
+      g_messages.InsertLast(Message(msg, "release"));
+    } else {
+      g_lastPressingAccelerationTime = g_currentTime;
+    }
+    g_isPressingAcceleration = isPressingAcceleration;
+  }
+
 
   int windowFlags = UI::WindowFlags::NoTitleBar | UI::WindowFlags::NoCollapse | UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoDocking;
   if (!UI::IsOverlayShown()) {
