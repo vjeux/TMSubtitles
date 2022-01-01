@@ -9,9 +9,11 @@ Resources::Font@ g_font;
 Resources::Font@ g_fontBold;
 Resources::Font@ g_fontIcons;
 
-uint g_currentGear = 1;
-
 float g_currentTime = 0;
+
+uint g_currentGear = 1;
+bool g_isGroundContact = true;
+float g_lastGroundContactTime = 0;
 
 void RenderMenu() {
   if (UI::BeginMenu("TMSubtitles")) {
@@ -23,12 +25,14 @@ void RenderMenu() {
 array<Message@> g_messages;
 
 class Message {
+  string type;
   string message;
   float time;
 
-  Message(string message_) {
+  Message(string message_, string type_) {
     message = message_;
     time = g_currentTime;
+    type = type_;
   }
 
   bool shouldBeDisplayed() {
@@ -66,8 +70,35 @@ void Render() {
     } else {
       msg = "Gear down to " + visState.CurGear;
     }
-    g_messages.InsertLast(Message(msg));
+    Message@ messageObj = Message(msg, "gear");
+    bool isCoalsced = false;
+    for (uint i = 0; i < g_messages.Length; ++i) {
+      if (g_messages[i].type == "gear") {
+        g_messages.RemoveAt(i);
+        g_messages.InsertAt(i, messageObj);
+        isCoalsced = true;
+        break;
+      }
+    }
+    if (!isCoalsced) {
+      g_messages.InsertLast(messageObj);
+    }
     g_currentGear = visState.CurGear;
+  }
+  bool isGroundContact =
+    visState.FLGroundContactMaterial != 80 ||
+    visState.FRGroundContactMaterial != 80 ||
+    visState.RLGroundContactMaterial != 80 ||
+    visState.RRGroundContactMaterial != 80;
+
+  if (isGroundContact != g_isGroundContact) {
+    if (isGroundContact) {
+      string msg = "Air time (" + Math::Round(g_currentTime - g_lastGroundContactTime) + "ms)";
+      g_messages.InsertLast(Message(msg, "airtime"));
+    } else {
+      g_lastGroundContactTime = g_currentTime;
+    }
+    g_isGroundContact = isGroundContact;
   }
 
   int windowFlags = UI::WindowFlags::NoTitleBar | UI::WindowFlags::NoCollapse | UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoDocking;
@@ -88,6 +119,11 @@ void Render() {
         UI::Text(g_messages[i].message);
       }
     }
+
+    UI::TableNextRow();
+    UI::TableNextColumn();
+    setMinWidth(100);
+//    UI::Text("Ground dist = " + visState.RLGroundContactMaterial);
     UI::EndTable();
   }
 
