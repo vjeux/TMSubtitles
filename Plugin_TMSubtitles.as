@@ -20,7 +20,7 @@ bool g_isWetTire = false;
 bool g_isDrifting = false;
 bool g_isSteerActionKey = false;
 float g_lastAbsSteer = 0;
-float g_lastSteerActionKeyTime = 0;
+uint g_countSteerActionKeyFrame = 0;
 
 void RenderMenu() {
   if (UI::BeginMenu("TMSubtitles")) {
@@ -35,11 +35,17 @@ class Message {
   string type;
   string message;
   float time;
+  array<float> rand;
+  float angle;
 
-  Message(string message_, string type_) {
+  Message(string message_, string type_, float angle_ = 0.5 * Math::PI) {
     message = message_;
     time = g_currentTime;
     type = type_;
+    angle = angle_;
+    for (uint i = 0; i < 10; ++i) {
+      rand.InsertLast(random());
+    }
   }
 
   bool shouldBeDisplayed() {
@@ -77,7 +83,7 @@ void Render() {
     } else {
       msg = "Gear down to " + visState.CurGear;
     }
-    Message@ messageObj = Message(msg, "gear");
+    Message@ messageObj = Message(msg, "gear", 0.1 * Math::PI);
     bool isCoalsced = false;
     for (uint i = 0; i < g_messages.Length; ++i) {
       if (g_messages[i].type == "gear") {
@@ -103,7 +109,7 @@ void Render() {
   if (isGroundContact != g_isGroundContact) {
     if (isGroundContact) {
       string msg = "Air time (" + Math::Round(g_currentTime - g_lastGroundContactTime) + "ms)";
-      g_messages.InsertLast(Message(msg, "airtime"));
+      g_messages.InsertLast(Message(msg, "airtime", 1.1 * Math::PI));
     } else {
       g_lastGroundContactTime = g_currentTime;
     }
@@ -135,14 +141,17 @@ void Render() {
     areFloatEpsilonEqual(absSteer, 0.8) ||
     areFloatEpsilonEqual(absSteer, 0.9);
   if (isSteerActionKey != g_isSteerActionKey) {
-    if (!isSteerActionKey && g_currentTime - g_lastSteerActionKeyTime > 50) {
+    if (!isSteerActionKey && g_countSteerActionKeyFrame > 3) {
       string msg = "ActionKey " + (g_lastAbsSteer * 100) + "%";
-      g_messages.InsertLast(Message(msg, "actionkey"));
-    } else {
-      g_lastSteerActionKeyTime = g_currentTime;
+      g_messages.InsertLast(Message(msg, "actionkey", 0.8 * Math::PI));
     }
     g_lastAbsSteer = absSteer;
     g_isSteerActionKey = isSteerActionKey;
+  }
+  if (isSteerActionKey) {
+    g_countSteerActionKeyFrame++;
+  } else {
+    g_countSteerActionKeyFrame = 0;
   }
 
   // Slipping Wet Tires
@@ -168,21 +177,7 @@ void Render() {
     g_isDrifting = isDrifting;
   }
 
-
-  int windowFlags = UI::WindowFlags::NoTitleBar | UI::WindowFlags::NoCollapse | UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoDocking;
-  if (!UI::IsOverlayShown()) {
-    windowFlags |= UI::WindowFlags::NoInputs;
-  }
-
-  UI::PushFont(g_font);
-  UI::Begin("TMSubtitles", windowFlags);
-  UI::BeginGroup();
-
-  if (UI::BeginTable("table", 1, UI::TableFlags::SizingFixedFit)) {
-    UI::TableNextRow();
-    UI::TableNextColumn();
-    setMinWidth(100);
-
+// Computation for drift angle
 //    UI::Text("" + visState.FLGroundContactMaterial);
 //    UI::Text("Up = (" + c(visState.Up.x) + ", " + c(visState.Up.y) + ", " + c(visState.Up.z) + ")");
 //    UI::Text("Dir = (" + c(visState.Dir.x) + ", " + c(visState.Dir.y) + ", " + c(visState.Dir.z) + ")");
@@ -193,18 +188,53 @@ void Render() {
 //    float angle = angleBetweenTwoVec3(visState.Dir, carVel);
 //    UI::Text("Angle = " + c(angle * 180 / Math::PI));
 
-    for (uint i = 0; i < g_messages.Length; ++i) {
-      if (g_messages[i].shouldBeDisplayed()) {
-        UI::Text(g_messages[i].message);
-      }
+
+  nvg::FontFace(g_font);
+  nvg::TextAlign(nvg::Align::Center | nvg::Align::Middle);
+  float anchorX = .5;
+  float anchorY = .7;
+  for (uint i = 0; i < g_messages.Length; ++i) {
+    if (g_messages[i].shouldBeDisplayed()) {
+      float angle = g_messages[i].angle + (g_messages[i].rand[0] - 0.5) * Math::PI * 0.1;
+      float dist = 0.15;
+      vec2 angly = vec2(
+        dist * Math::Cos(angle) * Draw::GetWidth(),
+        -dist * Math::Sin(angle) * Draw::GetHeight()
+      );
+      vec2 start = vec2(
+        anchorX * Draw::GetWidth() - 100 /* 200 = width / 2 */,
+        anchorY * Draw::GetHeight()
+      ) + angly;
+      vec2 end = start + angly + vec2(0, 0.1 * Draw::GetHeight());
+
+      float controlDisplacement = g_messages[i].rand[1] * 0.1;
+      vec2 control1 = vec2(
+        start.x + (end.x - start.x) / 3,
+        Math::Max(start.y, end.y) - controlDisplacement * Draw::GetHeight()
+      );
+      vec2 control2 = vec2(
+        start.x + (end.x - start.x) * 2 / 3,
+        Math::Max(start.y, end.y) - controlDisplacement * Draw::GetHeight()
+      );
+      float t = (g_currentTime - g_messages[i].time) / 1000;
+      vec2 pos = bezier(start, control1, control2, end, t);
+
+      drawText(pos, g_messages[i].message);
     }
-
-    UI::EndTable();
   }
+}
 
-  UI::EndGroup();
-  UI::End();
-  UI::PopFont();
+void drawText(vec2 pos, string text) {
+  nvg::FillColor(vec4(0, 0, 0, 1));
+  nvg::TextBox(pos.x + 1, pos.y + 1, 200, text);
+  nvg::FillColor(vec4(1, 1, 1, 1));
+  nvg::TextBox(pos.x, pos.y, 200, text);
+}
+
+uint g_seed = 1;
+float random() {
+  float x = Math::Sin(g_seed++) * 10000;
+  return x - Math::Floor(x);
 }
 
 bool areFloatEpsilonEqual(float a, float b) {
@@ -248,6 +278,20 @@ bool isAnyWheelTouchingType(CSceneVehicleVisState@ visState, int type) {
     visState.FRGroundContactMaterial == type ||
     visState.RLGroundContactMaterial == type ||
     visState.RRGroundContactMaterial == type;
+}
+
+vec2 bezier(vec2 start, vec2 control1, vec2 control2, vec2 end, float t) {
+  return vec2(
+    (1 - t) ** 3 * start.x +
+      3 * (1 - t) ** 2 * t * control1.x +
+      3 * (1 - t) * t ** 2 * control2.x +
+      t ** 3 * end.x,
+
+    (1 - t) ** 3 * start.y +
+      3 * (1 - t) ** 2 * t * control1.y +
+      3 * (1 - t) * t ** 2 * control2.y +
+      t ** 3 * end.y
+  );
 }
 
 
