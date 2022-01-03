@@ -18,9 +18,9 @@ bool g_isPressingAcceleration = true;
 float g_lastPressingAccelerationTime = 0;
 bool g_isWetTire = false;
 bool g_isDrifting = false;
-bool g_isSteerMacro = false;
+bool g_isSteerActionKey = false;
 float g_lastAbsSteer = 0;
-float g_lastSteerMacroTime = 0;
+float g_lastSteerActionKeyTime = 0;
 
 void RenderMenu() {
   if (UI::BeginMenu("TMSubtitles")) {
@@ -122,9 +122,9 @@ void Render() {
     g_isPressingAcceleration = isPressingAcceleration;
   }
 
-  // SteerMacro
+  // SteerActionKey
   float absSteer = Math::Abs(visState.InputSteer);
-  bool isSteerMacro =
+  bool isSteerActionKey =
     areFloatEpsilonEqual(absSteer, 0.1) ||
     areFloatEpsilonEqual(absSteer, 0.2) ||
     areFloatEpsilonEqual(absSteer, 0.3) ||
@@ -134,15 +134,15 @@ void Render() {
     areFloatEpsilonEqual(absSteer, 0.7) ||
     areFloatEpsilonEqual(absSteer, 0.8) ||
     areFloatEpsilonEqual(absSteer, 0.9);
-  if (isSteerMacro != g_isSteerMacro) {
-    if (!isSteerMacro && g_currentTime - g_lastSteerMacroTime > 50) {
-      string msg = "Macro " + (g_lastAbsSteer * 100) + "%";
-      g_messages.InsertLast(Message(msg, "macrosteer"));
+  if (isSteerActionKey != g_isSteerActionKey) {
+    if (!isSteerActionKey && g_currentTime - g_lastSteerActionKeyTime > 50) {
+      string msg = "ActionKey " + (g_lastAbsSteer * 100) + "%";
+      g_messages.InsertLast(Message(msg, "actionkey"));
     } else {
-      g_lastSteerMacroTime = g_currentTime;
+      g_lastSteerActionKeyTime = g_currentTime;
     }
     g_lastAbsSteer = absSteer;
-    g_isSteerMacro = isSteerMacro;
+    g_isSteerActionKey = isSteerActionKey;
   }
 
   // Slipping Wet Tires
