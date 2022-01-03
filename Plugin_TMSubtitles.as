@@ -16,6 +16,8 @@ bool g_isGroundContact = true;
 float g_lastGroundContactTime = 0;
 bool g_isPressingAcceleration = true;
 float g_lastPressingAccelerationTime = 0;
+bool g_isWetTire = false;
+bool g_isDrifting = false;
 
 
 void RenderMenu() {
@@ -88,6 +90,8 @@ void Render() {
     }
     g_currentGear = visState.CurGear;
   }
+
+  // Ground Contact
   bool isGroundContact =
     visState.FLGroundContactMaterial != 80 ||
     visState.FRGroundContactMaterial != 80 ||
@@ -104,6 +108,7 @@ void Render() {
     g_isGroundContact = isGroundContact;
   }
 
+  // Release
   bool isPressingAcceleration = visState.InputGasPedal > 0;
   if (isPressingAcceleration != g_isPressingAcceleration) {
     if (isPressingAcceleration) {
@@ -113,6 +118,29 @@ void Render() {
       g_lastPressingAccelerationTime = g_currentTime;
     }
     g_isPressingAcceleration = isPressingAcceleration;
+  }
+
+  // Slipping Wet Tires
+  bool isDrifting =
+    visState.FLSlipCoef > 0 &&
+    visState.FRSlipCoef > 0 &&
+    visState.RLSlipCoef > 0 &&
+    visState.RRSlipCoef > 0;
+  if (isDrifting != g_isDrifting) {
+    if (
+      isDrifting &&
+      visState.WetnessValue01 > 0 &&
+      isGroundContact &&
+      !isAnyWheelTouchingType(visState, EPlugSurfaceMaterialId::Water) &&
+      !isAnyWheelTouchingType(visState, EPlugSurfaceMaterialId::WetDirtRoad) &&
+      !isAnyWheelTouchingType(visState, EPlugSurfaceMaterialId::WetAsphalt) &&
+      !isAnyWheelTouchingType(visState, EPlugSurfaceMaterialId::WetPavement) &&
+      !isAnyWheelTouchingType(visState, EPlugSurfaceMaterialId::WetGrass)
+    ) {
+      string msg = "Slipping Wet Tires";
+      g_messages.InsertLast(Message(msg, "wettires"));
+    }
+    g_isDrifting = isDrifting;
   }
 
 
@@ -126,19 +154,26 @@ void Render() {
   UI::BeginGroup();
 
   if (UI::BeginTable("table", 1, UI::TableFlags::SizingFixedFit)) {
+    UI::TableNextRow();
+    UI::TableNextColumn();
+    setMinWidth(100);
+
+//    UI::Text("" + visState.FLGroundContactMaterial);
+//    UI::Text("Up = (" + c(visState.Up.x) + ", " + c(visState.Up.y) + ", " + c(visState.Up.z) + ")");
+//    UI::Text("Dir = (" + c(visState.Dir.x) + ", " + c(visState.Dir.y) + ", " + c(visState.Dir.z) + ")");
+//    vec3 carVel = normalize(visState.WorldVel);
+//    UI::Text("WorldVel = (" + c(carVel.x) + ", " + c(carVel.y) + ", " + c(carVel.z) + ")");
+//    vec3 diff = visState.Dir - carVel;
+//    UI::Text("Diff = (" + c(diff.x) + ", " + c(diff.y) + ", " + c(diff.z) + ")");
+//    float angle = angleBetweenTwoVec3(visState.Dir, carVel);
+//    UI::Text("Angle = " + c(angle * 180 / Math::PI));
+
     for (uint i = 0; i < g_messages.Length; ++i) {
       if (g_messages[i].shouldBeDisplayed()) {
-        UI::TableNextRow();
-        UI::TableNextColumn();
-        setMinWidth(100);
         UI::Text(g_messages[i].message);
       }
     }
 
-    UI::TableNextRow();
-    UI::TableNextColumn();
-    setMinWidth(100);
-//    UI::Text("Ground dist = " + visState.RLGroundContactMaterial);
     UI::EndTable();
   }
 
@@ -147,11 +182,43 @@ void Render() {
   UI::PopFont();
 }
 
+float dot3(vec3 a, vec3 b) {
+  return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+}
+
+float angleBetweenTwoVec3(vec3 a, vec3 b) {
+  float magA = magnitude3(a);
+  float magB = magnitude3(b);
+  if (magA == 0 || magB == 0) {
+    return 0;
+  }
+  return Math::Acos(dot3(a, b) / magA * magB);
+}
+
+float magnitude3(vec3 v) {
+  return Math::Sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
+}
+
+vec3 normalize(vec3 v) {
+   float length_of_v = magnitude3(v);
+   if (length_of_v == 0) {
+    return vec3(0, 0, 0);
+   }
+   return vec3(v.x / length_of_v, v.y / length_of_v, v.z / length_of_v);
+}
+
+float c(float f) {
+  return Math::Round(f * 100) / 100;
+}
 
 
-
-
-
+bool isAnyWheelTouchingType(CSceneVehicleVisState@ visState, int type) {
+  return
+    visState.FLGroundContactMaterial == type ||
+    visState.FRGroundContactMaterial == type ||
+    visState.RLGroundContactMaterial == type ||
+    visState.RRGroundContactMaterial == type;
+}
 
 
 // Functions borrowed from tm-dashboard
